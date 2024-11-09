@@ -1,10 +1,12 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class SubTask {
+  String? id; // Add the id field
   String timeFrame;
   String details;
 
   SubTask({
+    this.id, // Make id optional, as it will be set after Firestore operation
     required this.timeFrame,
     required this.details,
   });
@@ -16,10 +18,11 @@ class SubTask {
     };
   }
 
-  static SubTask fromMap(Map<String, dynamic> map) {
+  static SubTask fromMap(Map<String, dynamic> map, String id) {
     return SubTask(
-      timeFrame: map['timeFrame'],
-      details: map['details'],
+      id: id, // Capture the id from Firestore
+      timeFrame: map['timeFrame'] ?? '',
+      details: map['details'] ?? '',
     );
   }
 }

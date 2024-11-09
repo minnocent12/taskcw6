@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart'; // For formatting the due date
+import 'package:intl/intl.dart';
 import 'package:taskcw6/models/task.dart';
 
 class TaskListScreen extends StatefulWidget {
@@ -15,9 +15,8 @@ class _TaskListScreenState extends State<TaskListScreen> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   String? _selectedPriority;
   DateTime? _selectedDueDate;
-  String? _selectedSortOption; // Null initial state
+  String? _selectedSortOption;
 
-  // Get a greeting based on time of day
   String _getGreeting() {
     int hour = DateTime.now().hour;
     if (hour < 12) return "Good Morning";
@@ -25,20 +24,18 @@ class _TaskListScreenState extends State<TaskListScreen> {
     return "Good Evening";
   }
 
-  // Logout function
   Future<void> _logout() async {
     await _auth.signOut();
     Navigator.pushReplacementNamed(context, '/login');
   }
 
-  // Add a task for the current user
   void _addTask() async {
     if (_taskController.text.isEmpty ||
         _selectedPriority == null ||
         _selectedDueDate == null) return;
 
     Task task = Task(
-      id: '', // Firestore will generate this
+      id: '',
       name: _taskController.text,
       priority: _selectedPriority!,
       dueDate: _selectedDueDate!,
@@ -59,7 +56,6 @@ class _TaskListScreenState extends State<TaskListScreen> {
     });
   }
 
-  // Function to open date picker
   Future<void> _selectDueDate(BuildContext context) async {
     final DateTime? picked = await showDatePicker(
       context: context,
@@ -74,7 +70,6 @@ class _TaskListScreenState extends State<TaskListScreen> {
     }
   }
 
-  // Toggle task completion status
   void _toggleTaskCompletion(String taskId, bool isCompleted) {
     _firestore
         .collection('users')
@@ -84,7 +79,6 @@ class _TaskListScreenState extends State<TaskListScreen> {
         .update({'isCompleted': !isCompleted});
   }
 
-  // Delete a task
   void _deleteTask(String taskId) {
     _firestore
         .collection('users')
@@ -94,7 +88,17 @@ class _TaskListScreenState extends State<TaskListScreen> {
         .delete();
   }
 
-  // Show dialog to add/edit sub-tasks
+  void _deleteSubTask(String taskId, String subTaskId) {
+    _firestore
+        .collection('users')
+        .doc(_auth.currentUser!.uid)
+        .collection('tasks')
+        .doc(taskId)
+        .collection('subTasks')
+        .doc(subTaskId)
+        .delete();
+  }
+
   void _showSubTaskDialog(String taskId) {
     TextEditingController _subTaskController = TextEditingController();
     TextEditingController _timeFrameController = TextEditingController();
@@ -132,7 +136,6 @@ class _TaskListScreenState extends State<TaskListScreen> {
     );
   }
 
-  // Add a sub-task for the current user
   void _addSubTask(String taskId, String timeFrame, String details) async {
     if (timeFrame.isEmpty || details.isEmpty) return;
 
@@ -141,18 +144,180 @@ class _TaskListScreenState extends State<TaskListScreen> {
       details: details,
     );
 
-    await _firestore
+    DocumentReference docRef = await _firestore
         .collection('users')
         .doc(_auth.currentUser!.uid)
         .collection('tasks')
         .doc(taskId)
         .collection('subTasks')
         .add(subTask.toMap());
+
+    setState(() {
+      // Assign the Firestore ID to the SubTask object
+      subTask.id = docRef.id;
+    });
   }
 
-  // Sort tasks based on the selected sort option
+  void _showEditTaskDialog(Task task) {
+    TextEditingController _nameController =
+        TextEditingController(text: task.name);
+    String? _priority = task.priority;
+    DateTime? _dueDate = task.dueDate;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: Text('Edit Task'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: _nameController,
+                    decoration: InputDecoration(labelText: 'Task Name'),
+                  ),
+                  DropdownButtonFormField<String>(
+                    value: _priority,
+                    hint: Text("Select Priority"),
+                    items:
+                        <String>['High', 'Medium', 'Low'].map((String value) {
+                      return DropdownMenuItem<String>(
+                        value: value,
+                        child: Text(value),
+                      );
+                    }).toList(),
+                    onChanged: (String? newValue) {
+                      setState(() {
+                        _priority = newValue;
+                      });
+                    },
+                  ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          _dueDate == null
+                              ? 'Select Due Date'
+                              : 'Due Date: ${DateFormat('yyyy-MM-dd').format(_dueDate!)}',
+                        ),
+                      ),
+                      IconButton(
+                        icon: Icon(Icons.calendar_today),
+                        onPressed: () async {
+                          final DateTime? picked = await showDatePicker(
+                            context: context,
+                            initialDate: _dueDate ?? DateTime.now(),
+                            firstDate: DateTime.now(),
+                            lastDate: DateTime(2101),
+                          );
+                          if (picked != null && picked != _dueDate) {
+                            setState(() {
+                              _dueDate = picked;
+                            });
+                          }
+                        },
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    _editTask(
+                        task.id, _nameController.text, _priority, _dueDate);
+                    Navigator.pop(context);
+                  },
+                  child: Text('Save Changes'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _editTask(
+      String taskId, String name, String? priority, DateTime? dueDate) {
+    if (name.isEmpty || priority == null || dueDate == null) return;
+
+    _firestore
+        .collection('users')
+        .doc(_auth.currentUser!.uid)
+        .collection('tasks')
+        .doc(taskId)
+        .update({
+      'name': name,
+      'priority': priority,
+      'dueDate': dueDate,
+    });
+  }
+
+  void _showEditSubTaskDialog(
+      String taskId, String subTaskId, SubTask subTask) {
+    TextEditingController _subTaskController =
+        TextEditingController(text: subTask.details);
+    TextEditingController _timeFrameController =
+        TextEditingController(text: subTask.timeFrame);
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text('Edit Sub-Task'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: _timeFrameController,
+                decoration: InputDecoration(labelText: 'Time Frame'),
+              ),
+              TextField(
+                controller: _subTaskController,
+                decoration: InputDecoration(labelText: 'Sub-Task Details'),
+              ),
+            ],
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () {
+                _editSubTask(taskId, subTaskId, _timeFrameController.text,
+                    _subTaskController.text);
+                Navigator.pop(context);
+              },
+              child: Text('Save Changes'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _editSubTask(
+      String taskId, String subTaskId, String timeFrame, String details) {
+    if (timeFrame.isEmpty || details.isEmpty) return;
+
+    _firestore
+        .collection('users')
+        .doc(_auth.currentUser!.uid)
+        .collection('tasks')
+        .doc(taskId)
+        .collection('subTasks')
+        .doc(subTaskId)
+        .update({
+      'timeFrame': timeFrame,
+      'details': details,
+    });
+  }
+
   List<Task> _sortTasks(List<Task> tasks) {
-    // Define a custom priority comparison for three priorities
     Map<String, int> priorityOrder = {
       'High': 3,
       'Medium': 2,
@@ -200,9 +365,13 @@ class _TaskListScreenState extends State<TaskListScreen> {
               children: [
                 TextField(
                   controller: _taskController,
-                  decoration: InputDecoration(labelText: 'Enter Task Name'),
+                  decoration: InputDecoration(
+                    labelText: 'Enter Task Name',
+                    border: OutlineInputBorder(),
+                  ),
                 ),
-                DropdownButton<String>(
+                SizedBox(height: 10),
+                DropdownButtonFormField<String>(
                   value: _selectedPriority,
                   hint: Text("Select Priority"),
                   items: <String>['High', 'Medium', 'Low'].map((String value) {
@@ -233,10 +402,9 @@ class _TaskListScreenState extends State<TaskListScreen> {
                   ],
                 ),
                 ElevatedButton(onPressed: _addTask, child: Text('Add Task')),
-                // Updated Sort Dropdown with new options
-                DropdownButton<String>(
+                DropdownButtonFormField<String>(
                   value: _selectedSortOption,
-                  hint: Text("Select sort criteria"), // Default hint text
+                  hint: Text("Select sort criteria"),
                   items: [
                     'Priority (High to Low)',
                     'Priority (Low to High)',
@@ -274,7 +442,6 @@ class _TaskListScreenState extends State<TaskListScreen> {
                       doc.data() as Map<String, dynamic>, doc.id);
                 }).toList();
 
-                // Apply sorting
                 tasks = _sortTasks(tasks);
 
                 return ListView.builder(
@@ -282,63 +449,103 @@ class _TaskListScreenState extends State<TaskListScreen> {
                   itemBuilder: (context, index) {
                     Task task = tasks[index];
 
-                    return ExpansionTile(
-                      title: Text(task.name),
-                      subtitle: Text(
-                          '${task.priority} Priority | Due: ${DateFormat('yyyy-MM-dd').format(task.dueDate)} | ${task.isCompleted ? 'Completed' : 'Pending'}'),
-                      children: [
-                        StreamBuilder(
-                          stream: _firestore
-                              .collection('users')
-                              .doc(_auth.currentUser!.uid)
-                              .collection('tasks')
-                              .doc(task.id)
-                              .collection('subTasks')
-                              .snapshots(),
-                          builder: (context,
-                              AsyncSnapshot<QuerySnapshot> subSnapshot) {
-                            if (!subSnapshot.hasData) return SizedBox.shrink();
-                            var subTasks = subSnapshot.data!.docs.map((doc) {
-                              return SubTask.fromMap(
-                                  doc.data() as Map<String, dynamic>);
-                            }).toList();
+                    return Card(
+                        margin:
+                            EdgeInsets.symmetric(vertical: 5, horizontal: 10),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        elevation: 3,
+                        child: ExpansionTile(
+                          title: Text(task.name,
+                              style: TextStyle(fontWeight: FontWeight.bold)),
+                          subtitle: Text(
+                            '${task.priority} Priority | Due: ${DateFormat('yyyy-MM-dd').format(task.dueDate)} | ${task.isCompleted ? 'Completed' : 'Pending'}',
+                            style: TextStyle(color: Colors.grey[700]),
+                          ),
+                          children: [
+                            StreamBuilder(
+                              stream: _firestore
+                                  .collection('users')
+                                  .doc(_auth.currentUser!.uid)
+                                  .collection('tasks')
+                                  .doc(task.id)
+                                  .collection('subTasks')
+                                  .snapshots(),
+                              builder: (context,
+                                  AsyncSnapshot<QuerySnapshot> snapshot) {
+                                if (!snapshot.hasData)
+                                  return CircularProgressIndicator();
 
-                            return ListView.builder(
-                              shrinkWrap: true,
-                              itemCount: subTasks.length,
-                              itemBuilder: (context, subIndex) {
-                                SubTask subTask = subTasks[subIndex];
-                                return ListTile(
-                                  title: Text(subTask.details),
-                                  subtitle: Text(subTask.timeFrame),
+                                var subTasks = snapshot.data!.docs.map((doc) {
+                                  return SubTask.fromMap(
+                                      doc.data() as Map<String, dynamic>,
+                                      doc.id); // Pass doc.id here
+                                }).toList();
+
+                                return Column(
+                                  children: [
+                                    ...subTasks.map((subTask) {
+                                      return ListTile(
+                                        title: Text(subTask.timeFrame),
+                                        subtitle: Text(subTask.details),
+                                        trailing: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            IconButton(
+                                              icon: Icon(Icons.edit,
+                                                  color: Colors.green),
+                                              onPressed: () =>
+                                                  _showEditSubTaskDialog(
+                                                      task.id,
+                                                      subTask.id!,
+                                                      subTask),
+                                            ),
+                                            IconButton(
+                                              icon: Icon(Icons.delete,
+                                                  color: Colors.red),
+                                              onPressed: () => _deleteSubTask(
+                                                  task.id, subTask.id!),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    }).toList(),
+                                    ListTile(
+                                      title: TextButton(
+                                        onPressed: () =>
+                                            _showSubTaskDialog(task.id),
+                                        child: Text('Add Sub-Task'),
+                                      ),
+                                    ),
+                                  ],
                                 );
                               },
-                            );
-                          },
-                        ),
-                        Row(
-                          children: [
-                            IconButton(
-                              icon: Icon(
-                                task.isCompleted
-                                    ? Icons.check_box
-                                    : Icons.check_box_outline_blank,
-                              ),
-                              onPressed: () => _toggleTaskCompletion(
-                                  task.id, task.isCompleted),
                             ),
-                            IconButton(
-                              icon: Icon(Icons.delete),
-                              onPressed: () => _deleteTask(task.id),
-                            ),
-                            IconButton(
-                              icon: Icon(Icons.add),
-                              onPressed: () => _showSubTaskDialog(task.id),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                Checkbox(
+                                  value: task.isCompleted,
+                                  onChanged: (bool? value) {
+                                    _toggleTaskCompletion(
+                                        task.id, task.isCompleted);
+                                  },
+                                ),
+                                IconButton(
+                                  onPressed: () => _showEditTaskDialog(task),
+                                  icon: Icon(Icons.edit, color: Colors.green),
+                                  tooltip: 'Edit Task',
+                                ),
+                                IconButton(
+                                  onPressed: () => _deleteTask(task.id),
+                                  icon: Icon(Icons.delete, color: Colors.red),
+                                  tooltip: 'Delete Task',
+                                ),
+                              ],
                             ),
                           ],
-                        ),
-                      ],
-                    );
+                        ));
                   },
                 );
               },
