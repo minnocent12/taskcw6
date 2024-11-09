@@ -343,6 +343,19 @@ class _TaskListScreenState extends State<TaskListScreen> {
     return tasks;
   }
 
+  Color _getPriorityColor(String priority) {
+    switch (priority) {
+      case 'High':
+        return Colors.red;
+      case 'Medium':
+        return Colors.yellow;
+      case 'Low':
+        return Colors.green;
+      default:
+        return Colors.grey;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     String userName = _auth.currentUser?.displayName ?? "User";
@@ -457,6 +470,10 @@ class _TaskListScreenState extends State<TaskListScreen> {
                         ),
                         elevation: 3,
                         child: ExpansionTile(
+                          leading: CircleAvatar(
+                            backgroundColor: _getPriorityColor(task.priority),
+                            radius: 5,
+                          ),
                           title: Text(task.name,
                               style: TextStyle(fontWeight: FontWeight.bold)),
                           subtitle: Text(
