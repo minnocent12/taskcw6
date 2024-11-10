@@ -372,74 +372,116 @@ class _TaskListScreenState extends State<TaskListScreen> {
       ),
       body: Column(
         children: [
+          // Add Task Section
           Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Column(
-              children: [
-                TextField(
-                  controller: _taskController,
-                  decoration: InputDecoration(
-                    labelText: 'Enter Task Name',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                SizedBox(height: 10),
-                DropdownButtonFormField<String>(
-                  value: _selectedPriority,
-                  hint: Text("Select Priority"),
-                  items: <String>['High', 'Medium', 'Low'].map((String value) {
-                    return DropdownMenuItem<String>(
-                      value: value,
-                      child: Text(value),
-                    );
-                  }).toList(),
-                  onChanged: (String? newValue) {
-                    setState(() {
-                      _selectedPriority = newValue!;
-                    });
-                  },
-                ),
-                Row(
+            padding: const EdgeInsets.all(16.0),
+            child: Card(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(15),
+              ),
+              elevation: 4,
+              child: Padding(
+                padding: const EdgeInsets.all(12.0),
+                child: Column(
                   children: [
-                    Expanded(
-                      child: Text(
-                        _selectedDueDate == null
-                            ? 'Select Due Date'
-                            : 'Due Date: ${DateFormat('yyyy-MM-dd').format(_selectedDueDate!)}',
+                    TextField(
+                      controller: _taskController,
+                      decoration: InputDecoration(
+                        labelText: 'Enter Task Name',
+                        border: OutlineInputBorder(),
+                        suffixIcon: Icon(Icons.task_alt),
                       ),
                     ),
-                    IconButton(
-                      icon: Icon(Icons.calendar_today),
-                      onPressed: () => _selectDueDate(context),
+                    SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            value: _selectedPriority,
+                            decoration: InputDecoration(
+                              labelText: "Priority",
+                              border: OutlineInputBorder(),
+                            ),
+                            items: <String>['High', 'Medium', 'Low']
+                                .map((String value) {
+                              return DropdownMenuItem<String>(
+                                value: value,
+                                child: Text(value),
+                              );
+                            }).toList(),
+                            onChanged: (String? newValue) {
+                              setState(() {
+                                _selectedPriority = newValue!;
+                              });
+                            },
+                          ),
+                        ),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: InkWell(
+                            onTap: () => _selectDueDate(context),
+                            child: InputDecorator(
+                              decoration: InputDecoration(
+                                labelText: 'Due Date',
+                                border: OutlineInputBorder(),
+                              ),
+                              child: Text(
+                                _selectedDueDate == null
+                                    ? 'Select Date'
+                                    : DateFormat('yyyy-MM-dd')
+                                        .format(_selectedDueDate!),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 10),
+                    ElevatedButton(
+                      onPressed: _addTask,
+                      child: Text('Add Task'),
+                      style: ElevatedButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        backgroundColor: Colors.blueAccent,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                      ),
                     ),
                   ],
                 ),
-                ElevatedButton(onPressed: _addTask, child: Text('Add Task')),
-                DropdownButtonFormField<String>(
-                  value: _selectedSortOption,
-                  hint: Text("Select sort criteria"),
-                  items: [
-                    'Priority (High to Low)',
-                    'Priority (Low to High)',
-                    'Due Date (Earliest to Latest)',
-                    'Due Date (Latest to Earliest)',
-                    'Task Completion (Pending)',
-                    'Task Completion (Completed)',
-                  ].map((String value) {
-                    return DropdownMenuItem<String>(
-                      value: value,
-                      child: Text(value),
-                    );
-                  }).toList(),
-                  onChanged: (String? newValue) {
-                    setState(() {
-                      _selectedSortOption = newValue;
-                    });
-                  },
-                ),
-              ],
+              ),
             ),
           ),
+
+          // Sort Criteria Dropdown
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: DropdownButtonFormField<String>(
+              value: _selectedSortOption,
+              hint: Text("Select sort criteria"),
+              items: [
+                'Priority (High to Low)',
+                'Priority (Low to High)',
+                'Due Date (Earliest to Latest)',
+                'Due Date (Latest to Earliest)',
+                'Task Completion (Pending)',
+                'Task Completion (Completed)',
+              ].map((String value) {
+                return DropdownMenuItem<String>(
+                  value: value,
+                  child: Text(value),
+                );
+              }).toList(),
+              onChanged: (String? newValue) {
+                setState(() {
+                  _selectedSortOption = newValue;
+                });
+              },
+            ),
+          ),
+
+          // Expanded Task List
           Expanded(
             child: StreamBuilder(
               stream: _firestore
@@ -466,13 +508,13 @@ class _TaskListScreenState extends State<TaskListScreen> {
                         margin:
                             EdgeInsets.symmetric(vertical: 5, horizontal: 10),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
+                          borderRadius: BorderRadius.circular(15),
                         ),
                         elevation: 3,
                         child: ExpansionTile(
                           leading: CircleAvatar(
                             backgroundColor: _getPriorityColor(task.priority),
-                            radius: 5,
+                            radius: 10,
                           ),
                           title: Text(task.name,
                               style: TextStyle(fontWeight: FontWeight.bold)),
@@ -497,7 +539,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
                                 var subTasks = snapshot.data!.docs.map((doc) {
                                   return SubTask.fromMap(
                                       doc.data() as Map<String, dynamic>,
-                                      doc.id); // Pass doc.id here
+                                      doc.id);
                                 }).toList();
 
                                 return Column(
